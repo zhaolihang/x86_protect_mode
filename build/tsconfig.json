@@ -1,0 +1,14 @@
+ {
+     "compileOnSave": true,
+     "compilerOptions": {
+         "module": "commonjs",
+         "target": "es6",
+         "noImplicitAny": false,
+         "allowJs": true,
+         "sourceMap": true,
+         "strictNullChecks": true
+     },
+     "include": [
+         "./**/*"
+     ]
+ }

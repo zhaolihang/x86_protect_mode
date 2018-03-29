@@ -1,0 +1,16 @@
+{
+  "name": "os",
+  "version": "0.0.1",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "fs-extra": "^3.0.1",
+    "shelljs": "^0.7.8"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^3.0.1",
+    "@types/shelljs": "^0.7.4",
+    "@types/node": "^9.6.1"
+  }
+}
