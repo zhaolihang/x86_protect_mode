@@ -6,7 +6,7 @@
         "taskName": "compile",
         "command": "node",
         "isShellCommand": true,
-        "args": ["./build/build.js", "${workspaceFolder}", "${fileDirname}"],
+        "args": ["./build/build.js", "${fileDirname}"],
         "showOutput": "always",
         "isBuildCommand": true
     }]
