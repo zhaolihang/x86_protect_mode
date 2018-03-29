@@ -20,15 +20,16 @@ const asmExt = '.asm';
 const binExt = '.bin';
 const listExt = '.list';
 const linkFileName = 'link.json';
+const hdSectionSize = 512;
 function getNasmArgs(fileName, ext) {
     return `${nasmFilePath} ${fileName}${ext} -o ${fileName}${binExt} -l ${fileName}${listExt}`;
 }
 function getExtFiles(aimExt) {
     let files = [];
     for (const fileName of shelljs.ls()) {
-        let ext = path.extname(fileName);
+        const ext = path.extname(fileName);
         if (ext.toLowerCase() === aimExt) {
-            let file = path.basename(fileName, ext);
+            const file = path.basename(fileName, ext);
             files.push([file, ext]);
         }
     }
@@ -38,14 +39,10 @@ function clear() {
     const binFiles = getExtFiles(binExt);
     const listFiles = getExtFiles(listExt);
     for (const binFile of binFiles) {
-        let fileName = binFile[0];
-        let ext = binFile[1];
-        shelljs.rm(`${fileName}${ext}`);
+        shelljs.rm(`${binFile[0]}${binFile[1]}`);
     }
     for (const listFile of listFiles) {
-        let fileName = listFile[0];
-        let ext = listFile[1];
-        shelljs.rm(`${fileName}${ext}`);
+        shelljs.rm(`${listFile[0]}${listFile[1]}`);
     }
     log('clear ok !');
 }
@@ -53,9 +50,7 @@ clear();
 function compile() {
     const asmFiles = getExtFiles(asmExt);
     for (const asmFile of asmFiles) {
-        let fileName = asmFile[0];
-        let ext = asmFile[1];
-        let cmd = getNasmArgs(fileName, ext);
+        const cmd = getNasmArgs(asmFile[0], asmFile[1]);
         log(cmd);
         shelljs.exec(cmd);
     }
@@ -81,7 +76,7 @@ function writeToHD() {
         const file = `${config.name}${binExt}`;
         const start = config.start;
         const buffer = fs.readFileSync(file);
-        let writeNum = fs.writeSync(fd, buffer, 0, buffer.length, start);
+        const writeNum = fs.writeSync(fd, buffer, 0, buffer.length, start * hdSectionSize);
         if (writeNum !== buffer.length) {
             throw new Error('writeNum !== buffer.length');
         }

@@ -1,4 +1,5 @@
 LEECHUNG.vhd
+LEECHUNG.vhd.lock
 node_modules
 *.bin
 *.list
