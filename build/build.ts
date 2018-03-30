@@ -63,7 +63,12 @@ function compile() {
     for (const asmFile of asmFiles) {
         const cmd = getNasmArgs(asmFile[0], asmFile[1]);
         log(cmd)
-        shelljs.exec(cmd);
+        let output = shelljs.exec(cmd);
+        if (output.code !== 0) {
+            // log(output.stderr)
+            log('>>>>> Compile Faild <<<<<')
+            process.exit(1);
+        }
     }
     log('compile ok !')
 }
