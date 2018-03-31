@@ -32,12 +32,12 @@ put_string:                                    ;显示串(0结尾)。
         or cl,cl
         jz put_stringRet
         call put_char
-        push cx
+        pop cx
         inc bx                          ;下一个字符 
         jmp put_string
 
 put_stringRet:
-        push cx
+        pop cx
         ret
 
 ;-------------------------------------------------------------------------------
