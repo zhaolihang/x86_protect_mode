@@ -1,0 +1,14 @@
+Bochs 常用命令
+b 0x7c00 断点
+s       step 单步执行
+c       continue 继续执行
+r       register 显示通用寄存器
+sreg    segment register 显示段寄存器
+
+xp /10  0x10000   显示物理地址10000号起始的 10个4字节(32 bits)
+q quit 退出
+
+n    执行完 循环
+
+u /10 0x7c00   反汇编 0x7c00开始的10条指令  如果没有地址的默认当前程序执行地址
+info eflags 
