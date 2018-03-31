@@ -2,11 +2,8 @@
 [bits 16]
 
             jmp near start
-mytext:     db 'L',0x07,'a',0x07,'b',0x07,'e',0x07,'l',0x07,' ',0x07,'o',0x07, \
-            'f',0x07,'f',0x07,'s',0x07,'e',0x07,'t',0x07,':',0x07
-mytextEnd:            
-number:     db 0,0,0,0,0
-
+message:    db '1+2+3+...+100='
+messageEnd: 
 start:
             mov ax,0x7c00>>4
             mov ds,ax
@@ -14,41 +11,53 @@ start:
             mov ax,0xb800
             mov es,ax
 
-            cld ; set DF=0 正向
-            ; std ; set DF=1
-
-            mov si,mytext
+            mov si,message
             xor di,di
-            mov cx,mytextEnd-mytext
-            rep movsb ;movsb 默认只能执行一次 加了rep 才能重复执行直到ZF=1
+            mov cx,messageEnd-message
 
-            mov bx,number
+showMes:    mov al,[si]
+            mov [es:di],al
+            inc di
+            mov byte [es:di],0x07
+            inc di
+            inc si
+            loop showMes
 
-            mov ax,number
-            mov cx,5
-            mov si,10
-digit:      xor dx,dx
-            div si ; 有符号除法 idiv  cbw (covert sign_byte to sign_word)
-            mov [bx],dl
-            inc bx
-            loop digit
+            xor ax,ax
+            mov cx,1
+calc:       
+            add ax,cx ;结果存放在ax中
+            inc cx
+            cmp cx,100
+            jle calc ;<=
 
-            mov bx,number
-            mov si,4
-show:       
-            mov al,[bx+si]
-            add al,0x30
-            mov ah,0x04
-            mov word [es:di],ax
-            add di,2
-            dec si
-            jns show  ;if SF!=1 then jmp
-            ; neg ax ; 0-ax中的数
 
-            mov byte [es:di],'D'
-            mov byte [es:di+1],0x07
+            xor cx,cx;set ss
+            mov ss,cx
+            mov sp,cx
 
-infi:       jmp near infi
+            mov bx,10
+            xor cx,cx
+calcNum:
+            inc cx
+            xor dx,dx
+            div bx
+            or dl,0x30; 0011_0000 or 0000_00xx  ===  0000_00xx + 0011_0000
+            push dx  ; no push dl 
+            cmp ax,0
+            jne calcNum
+
+            ;loop cx times
+showNum:
+            pop dx
+            mov [es:di],dl
+            inc di
+            mov byte [es:di],0x07
+            inc di
+            loop showNum
+
+
+            jmp near $
             db 0,0,0,0,0
             times 510-($-$$) db 0
             db 0x55,0xaa
