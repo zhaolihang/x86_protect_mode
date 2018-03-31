@@ -13,8 +13,6 @@ SECTION mbr align=16 vstart=0x7c00
             mov bx,16
             div bx
             mov ds,ax
-            mov es,ax
-
 
             xor di,di
             mov si,app_lba_start
