@@ -8,7 +8,9 @@ let workspaceFolder = path.join(__dirname, '../');
 let hdFilePath = path.join(workspaceFolder, 'src/LEECHUNG.vhd');
 let nasmFilePath = path.join(__dirname, 'nasm-2.13.03/nasm.exe');
 let buildPath = process.argv[2];
+let isDebug = false;
 if (!buildPath) {
+    isDebug = true;
     buildPath = path.join(workspaceFolder, 'src/c07');
 }
 shelljs.cd(buildPath);
@@ -54,7 +56,9 @@ function compile() {
         log(cmd);
         let output = shelljs.exec(cmd);
         if (output.code !== 0) {
-            // log(output.stderr)
+            if (isDebug) {
+                log(output.stderr);
+            }
             log('>>>>> Compile Faild <<<<<');
             process.exit(1);
         }
