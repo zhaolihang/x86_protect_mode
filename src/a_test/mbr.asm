@@ -45,7 +45,7 @@ fastA20:    in al,0x92                         ;南桥芯片内的端口
 
             ;dword 说明偏移量是32位 由于这条代码是在16位模式下编译的所以有后缀0x66
             ;已经进入了保护模式所以段前缀表示段选择子 1号段即当前代码段 进行跳转的目的是刷新代码段寄存器缓存，清空流水线 
-            jmp dword 0_0000_0000_0010_000b:flush  ;加载第2号段
+            jmp dword 0_0000_0000_0010_000b:flush  ;加载第2号段 
 
             [bits 32]
 flush:
@@ -84,9 +84,36 @@ _32Start:;一下代码是在32位模式下运行的
             mov byte [es:0x0b8000+0x24],' '
             mov byte [es:0x0b8000+0x26],' '
 
+
+             ;开始冒泡排序 
+            mov ecx,stringEnd-string-1              ;遍历次数=串长度-1 
+@@1:
+            push ecx                           ;32位模式下的loop使用ecx 
+            xor bx,bx                          ;32位模式下，偏移量可以是16位，也可以 
+@@2:                                      ;是后面的32位 
+            mov ax,[string+bx] 
+            cmp ah,al                          ;ah中存放的是源字的高字节 
+            jge @@3 
+            xchg al,ah 
+            mov [string+bx],ax 
+@@3:
+            inc bx 
+            loop @@2 
+            pop ecx 
+            loop @@1
+        
+            mov ecx,stringEnd-string
+            xor ebx,ebx                        ;偏移地址是32位的情况 
+@@4:                                      ;32位的偏移具有更大的灵活性
+            mov ah,0x07
+            mov al,[string+ebx]
+            mov [es:0xb80a0+ebx*2],ax          ;演示0~4GB寻址。
+            inc ebx
+            loop @@4
+
 infi:       jmp near infi
-
-
+string:      db 's0ke4or92xap3fv8giuzjcy5l1m7hd6bnqtw.'
+stringEnd:
 gdt_p:  
             dw 0
             dd 0x00007e00
