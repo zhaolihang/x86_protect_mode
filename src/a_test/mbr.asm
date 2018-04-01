@@ -80,6 +80,21 @@ _32Start:;一下代码是在32位模式下运行的
             mov byte [0x24],' '
             mov byte [0x26],' '
 
+            ;test 32 prodect mode stack opration
+            mov ax,0_0000_0000_0011_000b
+            mov ss,ax
+            mov esp,0x7c00
+
+            mov eax,esp
+            push byte '.'  ;压入的是字节 编译之后还是4字节的
+
+            sub eax,4
+            cmp eax,esp
+            jnz infi
+            pop eax
+            mov byte [0x28],al
+            mov byte [0x2a],' '
+            mov byte [0x2c],' '
 
 infi:       jmp near infi
 
