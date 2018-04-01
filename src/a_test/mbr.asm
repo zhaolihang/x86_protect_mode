@@ -1,143 +1,93 @@
-; 显卡字符发生器 起始内存地址0xb800  每两个字节定义一个字符  低地址是ASCII码高地址是字符颜色属性
-[bits 16]
 
-            app_lba_start equ 100
+
 SECTION mbr align=16 vstart=0x7c00
+            [bits 16]
 
             mov ax,0
-            mov ss,ax
-            mov sp,ax
+            mov ds,ax
+            mov es,ax
+            ;0x7c00以下是栈段
+            mov ax,0
+            mov ss,ax  
+            mov sp,0x7c00
 
-            mov ax,[cs:phy_base]
-            mov dx,[cs:phy_base+2]
+            mov ax,[es:gdt_baseP]
+            mov dx,[es:gdt_baseP+2]
             mov bx,16
             div bx
+            mov ds,ax;set data segment
+
+            ; first null gdt
+            mov dword [0x00],0x00
+            mov dword [0x04],0x00
+
+            ;this code segment
+            mov dword [0x08],0x7c0001ff ;段基址是0x7c00 
+            mov dword [0x0c],0x00409800
+            
+            ; video segment
+            mov dword [0x10],0x8000ffff     
+            mov dword [0x14],0x0040920b
+
+            ;stack segment
+            mov dword [0x18],0x00007a00; 粒度=0 byte type=0010 向下拓展 基地址0x00000000 界限是0x7a00 
+            mov dword [0x1c],0x00409600 ;即 0x0000ffff → 0x00007a00 属于此段
+
+            mov word [es:gdt_baseSizeP],31 ;最大索引值 按bit计算
+
+            lgdt [es:gdt_baseSizeP]
+
+fastA20:    in al,0x92                         ;南桥芯片内的端口 
+            or al,0000_0010B
+            out 0x92,al                        ;打开A20        
+
+            cli ;关中断
+
+            mov eax,cr0
+            or eax,0x01 ;最低位(pe) 为1 开启保护模式
+            mov cr0,eax
+
+            ;dword 说明偏移量是32位 由于这条代码是在16位模式下编译的所以有后缀0x66
+            ;已经进入了保护模式所以段前缀表示段选择子 1号段即当前代码段 进行跳转的目的是刷新代码段寄存器缓存，清空流水线 
+            ;由于 vstart=0x7c00 并且代码段的基址是0x7c00 所以flush-0x7c00 才是真正的偏移地址
+            jmp dword 0_0000_0000_0001_000b:(flush-0x7c00)  
+
+            [bits 32]
+flush:
+_32Start:;一下代码是在32位模式下运行的
+            mov ax,0_0000_0000_0010_000b;加载第2号段 即显卡数据段
             mov ds,ax
 
-            xor di,di
-            mov si,app_lba_start
-            xor bx,bx
-            call read_hard_disk_0
-            
-            mov dx,[2]
-            mov ax,[0]
-            mov bx,512
-            div bx
-            cmp dx,0
-            jnz add_1
-            jmp sub_1
-add_1:      inc ax
-sub_1:      dec ax ;ax 中记录了剩余要读取的数量
-            cmp ax,0
-            je set_app
-
-            mov cx,ax
-            xor di,di
-            mov si,app_lba_start+1
-            mov bx,512
-readLoop:
-        call read_hard_disk_0
-        inc si
-        add bx,512
-        loop readLoop
+            ; 在屏幕上显示字符 说明成功的进入了保护模式
+            mov byte [0x00],'P'  
+            mov byte [0x02],'r'
+            mov byte [0x04],'o'
+            mov byte [0x06],'t'
+            mov byte [0x08],'e'
+            mov byte [0x0a],'c'
+            mov byte [0x0c],'t'
+            mov byte [0x0e],' '
+            mov byte [0x10],'m'
+            mov byte [0x12],'o'
+            mov byte [0x14],'d'
+            mov byte [0x16],'e'
+            mov byte [0x18],' '
+            mov byte [0x1a],'O'
+            mov byte [0x1c],'K'
+            mov byte [0x1e],'!'
+            mov byte [0x20],'!'
+            mov byte [0x22],'!'
+            mov byte [0x24],' '
+            mov byte [0x26],' '
 
 
-set_app:
-        mov dx,[0x08]
-        mov ax,[0x06]
-        call calc_segment_forApp
-        mov word [0x06],ax
-
-        mov cx,[0x0a]                   ;需要重定位的项目数量
-        mov bx,0x0c                     ;重定位表首地址
-        cmp cx,0
-        je enter_app
-
-calc_otherSegment:
-        mov ax,[bx]
-        mov dx,[bx+2]
-        call calc_segment_forApp
-        mov word [bx],ax
-        add bx,4
-        loop calc_otherSegment
-
-enter_app:
-        mov ax,ds
-        mov es,ax ;加载程序要设置ds es 指向 用户程序头段
-        jmp far [0x04] ;enter app's code_entry
-
-calc_segment_forApp:  ;传入 dx:ax 32位 返回ax
-        push dx
-        add ax,[cs:phy_base]
-        adc dx,[cs:phy_base+2]
-        ; 将 dx:ax 32位 数右移4位 就是段地址
-        shr ax,4
-        ; shl dx,12
-        ror dx,4 ;循环右移
-        and dx,1111_0000_0000_0000b;保留高4位
-        or ax,dx
-
-        pop dx
-        ret
+infi:       jmp near infi
 
 
-read_hard_disk_0:   ;   输入：DI:SI=起始逻辑扇区号 
-                    ;   DS:BX=目标缓冲区地址
-            push ax
-            push bx
-            push cx
-            push dx
-            
-            mov dx,0x1f2 ;扇区数量端口
-            mov ax,1
-            out dx,al
-
-            ; out lba number
-            inc dx
-            mov ax,si
-            out dx,al
-
-            inc dx
-            mov al,ah
-            out dx,al
-
-            inc dx
-            mov ax,di
-            out dx,al
-
-            inc dx
-            mov al,ah
-            or al,1110_0000b;LBA28模式，主盘
-            out dx,al
-
-            inc dx ;commond and state port 0x1f7  8 bits port
-            mov al,0x20 ; read
-            out dx,al
-    waitState:       
-            in al,dx
-            and al,1000_1000b
-            cmp al,0000_1000b
-            jnz waitState
-
-            mov cx,256
-            mov dx,0x1f0 ;data port 16 bits port
-    readWord:   
-            in ax,dx
-            mov [bx],ax
-            add bx,2
-            loop readWord
-
-            pop dx
-            pop cx
-            pop bx
-            pop ax
-
-            ret
-
-
-            jmp near $
-phy_base:   dd 0x10000             ;用户程序被加载的物理起始地址
-
+gdt_baseSizeP:  
+            dw 0
+gdt_baseP:  
+            dd 0x00007e00
 
             times 510-($-$$) db 0
             db 0x55,0xaa
