@@ -62,6 +62,8 @@ calc_otherSegment:
         loop calc_otherSegment
 
 enter_app:
+        mov ax,ds
+        mov es,ax ;加载程序要设置ds es 指向 用户程序头段
         jmp far [0x04] ;enter app's code_entry
 
 calc_segment_forApp:  ;传入 dx:ax 32位 返回ax
