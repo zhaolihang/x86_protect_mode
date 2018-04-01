@@ -86,8 +86,7 @@ _32Start:;一下代码是在32位模式下运行的
             mov esp,0x7c00
 
             mov eax,esp
-            push byte '.'  ;压入的是字节 编译之后还是4字节的
-
+            push byte '.'  ;压入的是字节 编译之后还是4字节的 栈工作在32模式下即使压入的一个字节单数esp指针已然要减4
             sub eax,4
             cmp eax,esp
             jnz infi
