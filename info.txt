@@ -11,4 +11,5 @@ q quit 退出
 n    执行完 循环
 
 u /10 0x7c00   反汇编 0x7c00开始的10条指令  如果没有地址的默认当前程序执行地址
-info eflags 
+info eflags
+info gdt  显示gdtr中的内容
