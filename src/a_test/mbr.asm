@@ -71,16 +71,16 @@ _32Start:;以下代码是在32位模式下运行的
 
             ;解析内核头信息
             mov eax,[edi];core length
-            xor edx,edx
-            mov ecx,512
-            div ecx
+            mov edx,eax
+            and edx,0xfffffe00
+            add edx,512
+            test eax,0x000001ff
+            cmovnz eax,edx
+            shr eax,9
 
-            or edx,edx
-            jz subOne
-addOne:     inc eax
-subOne:     dec eax
+            dec eax;已经度过一个扇区了
             or eax,eax
-            jz setupCore
+            jz setupCore;如果剩余0扇区直接进入内核
 
             mov ecx,eax
             mov eax,core_start_sector+1
