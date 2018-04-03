@@ -1,0 +1,13 @@
+[{
+    "name": "c13_mbr",
+    "start": 0
+}, {
+    "name": "c13_core",
+    "start": 1
+}, {
+    "name": "c13",
+    "start": 100
+},{
+    "name": "diskdata.txt",
+    "start": 50
+}]

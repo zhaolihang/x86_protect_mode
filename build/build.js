@@ -82,7 +82,10 @@ function writeToHD() {
     }
     const fd = fs.openSync(hdFilePath, 'r+');
     for (const config of configArray) {
-        const file = `${config.name}${binExt}`;
+        let file = `${config.name}${binExt}`;
+        if (path.extname(config.name)) {
+            file = config.name;
+        }
         const start = config.start;
         const buffer = fs.readFileSync(file);
         const writeNum = fs.writeSync(fd, buffer, 0, buffer.length, start * hdSectionSize);
