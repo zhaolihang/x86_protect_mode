@@ -2,6 +2,12 @@
     "name": "mbr",
     "start": 0
 }, {
+    "name": "core",
+    "start": 1
+}, {
     "name": "app",
     "start": 100
+},{
+    "name": "diskdata.txt",
+    "start": 50
 }]
