@@ -10,7 +10,7 @@
          video_ram_seg_sel     equ  0x20    ;视频显示缓冲区的段选择子
          core_stack_seg_sel    equ  0x18    ;内核堆栈段选择子
          mem_0_4_gb_seg_sel    equ  0x08    ;整个0-4GB内存的段的选择子
-
+         app_disk_sector_num   equ  50
 ;-------------------------------------------------------------------------------
          ;以下是系统核心的头部，用于加载核心程序 
          core_length      dd core_end       ;核心程序总长度#00
@@ -273,28 +273,32 @@ set_up_gdt_descriptor:                      ;在GDT内安装一个新的描述�
          mov ebx,core_data_seg_sel          ;切换到核心数据段
          mov ds,ebx
 
-         sgdt [pgdt]                        ;以便开始处理GDT
+         sgdt [tempgdtrP]                        ;[ds:tempgdtrP]临时保存到核心数据段的内存中
 
          mov ebx,mem_0_4_gb_seg_sel
          mov es,ebx
-
-         movzx ebx,word [pgdt]              ;GDT界限 
+         
+         ;GDT界限
+         xor ebx,ebx
+         mov bx,[tempgdtrP] 
          inc bx                             ;GDT总字节数，也是下一个描述符偏移 
-         add ebx,[pgdt+2]                   ;下一个描述符的线性地址 
+        ;  movzx ebx,word [tempgdtrP]             ;Move with Zero-Extend 无符号拓展数据位数， 0xf000→0x0000f000
+         add ebx,[tempgdtrP+2]                   ;[tempgdtrP+2]中是基址 ，下一个描述符的线性地址 
       
-         mov [es:ebx],eax
+         mov [es:ebx],eax; 真正的安装
          mov [es:ebx+4],edx
       
-         add word [pgdt],8                  ;增加一个描述符的大小   
+         add word [tempgdtrP],8                  ;增加一个描述符的大小   
       
-         lgdt [pgdt]                        ;对GDT的更改生效 
+         lgdt [tempgdtrP]                        ;对GDT的更改生效 
        
-         mov ax,[pgdt]                      ;得到GDT界限值
+         mov ax,[tempgdtrP]                      ;得到GDT界限值
          xor dx,dx
-         mov bx,8
+         mov bx,8 ;界限值/8  商就是索引号
          div bx                             ;除以8，去掉余数
-         mov cx,ax                          
-         shl cx,3                           ;将索引号移到正确位置 
+         mov cx,ax; cx 索引号                          
+         shl cx,3                    ;0000_0000_0000_0001→0_0000_0000_0001_000       ;将索引号移到正确位置 
+         ;cx 中保存安装完的段描述符索引
 
          pop es
          pop ds
@@ -305,33 +309,33 @@ set_up_gdt_descriptor:                      ;在GDT内安装一个新的描述�
       
          retf 
 ;-------------------------------------------------------------------------------
-make_seg_descriptor:                        ;构造存储器和系统的段描述符
-                                            ;输入：EAX=线性基地址
-                                            ;      EBX=段界限
-                                            ;      ECX=属性。各属性位都在原始
-                                            ;          位置，无关的位清零 
-                                            ;返回：EDX:EAX=描述符
+make_seg_descriptor:                     ;构造描述符
+                                         ;输入：EAX=线性基地址
+                                         ;      EBX=段界限
+                                         ;      ECX=属性（各属性位都在原始
+                                         ;      位置，其它没用到的位置0） 
+                                         ;返回：EDX:EAX=完整的描述符
          mov edx,eax
-         shl eax,16
-         or ax,bx                           ;描述符前32位(EAX)构造完毕
+         shl eax,16                     
+         or ax,bx                        ;描述符前32位(EAX)构造完毕
+      
+         and edx,0xffff0000              ;清除基地址中无关的位
+         rol edx,8;循环左移
+         bswap edx ;bitswap 按位互换 31→0 0→31  ;装配基址的31~24和23~16  (80486+)
+      
+         xor bx,bx ;ebx 清除低16位保留高4位
+         or edx,ebx                      ;合并 段界限的高4位到edx
+      
+         or edx,ecx                      ;合并 属性到edx
 
-         and edx,0xffff0000                 ;清除基地址中无关的位
-         rol edx,8
-         bswap edx                          ;装配基址的31~24和23~16  (80486+)
-
-         xor bx,bx
-         or edx,ebx                         ;装配段界限的高4位
-
-         or edx,ecx                         ;装配属性
-
-         retf
+         retf;返回edx:eax
 sys_routineEnd:
 
 
 ;===============================================================================
 SECTION core_data vstart=0                  ;系统核心的数据段
 ;-------------------------------------------------------------------------------
-         pgdt             dw  0             ;用于设置和修改GDT 
+         tempgdtrP        dw  0             ;用于设置和修改GDT 
                           dd  0
 
          ram_alloc        dd  0x00100000    ;下次分配内存时的起始地址
@@ -412,36 +416,38 @@ load_relocate_program:                      ;加载并重定位用户程序
          mov ebx,eax
          and ebx,0xfffffe00                 ;使之512字节对齐（能被512整除的数， 
          add ebx,512                        ;低9位都为0 
+         ;test a,b 按位与 结果影响标志位
          test eax,0x000001ff                ;程序的大小正好是512的倍数吗? 
          cmovnz eax,ebx                     ;不是。使用凑整的结果 
+         ;  eax 保存 与512字节对齐的程序大小
       
          mov ecx,eax                        ;实际需要申请的内存数量
-         call sys_routine_seg_sel:allocate_memory
+         call sys_routine_seg_sel:allocate_memory ;ecx 数量 返回ecx基址
          mov ebx,ecx                        ;ebx -> 申请到的内存首地址
-         push ebx                           ;保存该首地址 
-         xor edx,edx
-         mov ecx,512
-         div ecx
-         mov ecx,eax                        ;总扇区数 
+         push ebx                           ;保存该首地址
+
+         shr eax,9  ;eax = eax/512
+         mov ecx,eax                        ;总扇区数
       
          mov eax,mem_0_4_gb_seg_sel         ;切换DS到0-4GB的段
          mov ds,eax
 
          mov eax,esi                        ;起始扇区号 
-  .b1:
+  .b1:  ;将用户的程序读入DS:ebx  起始扇区在eax  读取ecx个
          call sys_routine_seg_sel:read_hard_disk_0
          inc eax
          loop .b1                           ;循环读，直到读完整个用户程序
 
-         ;建立程序头部段描述符
-         pop edi                            ;恢复程序装载的首地址 
-         mov eax,edi                        ;程序头部起始线性地址
-         mov ebx,[edi+0x04]                 ;段长度
-         dec ebx                            ;段界限 
-         mov ecx,0x00409200                 ;字节粒度的数据段描述符
-         call sys_routine_seg_sel:make_seg_descriptor
-         call sys_routine_seg_sel:set_up_gdt_descriptor
-         mov [edi+0x04],cx                   
+         pop edi    ;恢复程序装载的首地址  ; see above code:  push ebx  
+         
+         ;用户程序头部段描述符
+         mov eax,edi ;eax 起始基地址 32bits
+         mov ebx,[edi+0x04]
+         dec ebx ; 限长32位长度
+         mov ecx,0x00409200 ;粒度字节，数据段 属性描述
+         call sys_routine_seg_sel:make_seg_descriptor ; 输入eax  ebx  ecx  返回edx:eax 段描述符
+         call sys_routine_seg_sel:set_up_gdt_descriptor ; 输入 edx:eax 段描述符  返回cx描述符索引
+         mov word [edi+0x04],cx ; 把索引安装回去
 
          ;建立程序代码段描述符
          mov eax,edi
@@ -468,22 +474,22 @@ load_relocate_program:                      ;加载并重定位用户程序
          mov ebx,0x000fffff
          sub ebx,ecx                        ;得到段界限
          mov eax,4096                        
-         mul dword [edi+0x0c]                         
-         mov ecx,eax                        ;准备为堆栈分配内存 
-         call sys_routine_seg_sel:allocate_memory
+         mul dword [edi+0x0c]   ; mul r/m32  被乘数放在eax 结果在edx:eax 中                       
+         mov ecx,eax                        ;  准备为堆栈分配内存 
+         call sys_routine_seg_sel:allocate_memory ;输入ecx 数量 返回ecx起始地址
          add eax,ecx                        ;得到堆栈的高端物理地址 
          mov ecx,0x00c09600                 ;4KB粒度的堆栈段描述符
-         call sys_routine_seg_sel:make_seg_descriptor
+         call sys_routine_seg_sel:make_seg_descriptor ; eax基址 ebx段限 ecx属性
          call sys_routine_seg_sel:set_up_gdt_descriptor
          mov [edi+0x08],cx
 
          ;重定位SALT
          mov eax,[edi+0x04]
-         mov es,eax                         ;es -> 用户程序头部 
+         mov es,eax                         ;es -> 用户程序头部 段描述符
          mov eax,core_data_seg_sel
          mov ds,eax
       
-         cld
+         cld   ;clear d flag direction 表示向上拓展
 
          mov ecx,[es:0x24]                  ;用户程序的SALT条目数
          mov edi,0x28                       ;用户程序内的SALT位于头部内0x2c处
@@ -570,7 +576,7 @@ start:
 
          mov ebx,message_5
          call sys_routine_seg_sel:put_string
-         mov esi,50                          ;用户程序位于逻辑50扇区 
+         mov esi,app_disk_sector_num ;用户程序逻辑扇区 
          call load_relocate_program
       
          mov ebx,do_status
