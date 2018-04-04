@@ -206,15 +206,15 @@ make_gdt_descriptor:                     ;构造描述符
          or ax,bx                        ;描述符前32位(EAX)构造完毕
       
          and edx,0xffff0000              ;清除基地址中无关的位
-         rol edx,8
-         bswap edx                       ;装配基址的31~24和23~16  (80486+)
+         rol edx,8;循环左移
+         bswap edx ;bitswap 按位互换 31→0 0→31  ;装配基址的31~24和23~16  (80486+)
       
-         xor bx,bx
-         or edx,ebx                      ;装配段界限的高4位
+         xor bx,bx ;ebx 清除低16位保留高4位
+         or edx,ebx                      ;合并 段界限的高4位到edx
       
-         or edx,ecx                      ;装配属性 
+         or edx,ecx                      ;合并 属性到edx
       
-         ret
+         ret ;返回edx:eax
 
 gdt_p:  
             dw 0
