@@ -492,7 +492,7 @@ load_relocate_program:                      ;加载并重定位用户程序
          cld   ;clear d flag direction 表示向上拓展
 
          mov ecx,[es:0x24]                  ;用户程序的SALT条目数
-         mov edi,0x28                       ;用户程序内的SALT位于头部内0x2c处
+         mov edi,0x28                       ;用户程序内的SALT位于头部内0x28处
   .b2: 
          push ecx
          push edi
@@ -505,7 +505,7 @@ load_relocate_program:                      ;加载并重定位用户程序
          push ecx
 
          mov ecx,64                         ;检索表中，每条目的比较次数 
-         repe cmpsd                         ;每次比较4字节 
+         repe cmpsd                         ;每次比较4字节   repe如果相等则重复 cmpsd 比较4字节
          jnz .b4
          mov eax,[esi]                      ;若匹配，esi恰好指向其后的地址数据
          mov [es:edi-256],eax               ;将字符串改写成偏移地址 
@@ -524,7 +524,7 @@ load_relocate_program:                      ;加载并重定位用户程序
          pop ecx
          loop .b2
 
-         mov ax,[es:0x04]
+         mov ax,[es:0x04]   ;返回值 ax 中保存用户程序头的段选择子
 
          pop es                             ;恢复到调用此过程前的es段 
          pop ds                             ;恢复到调用此过程前的ds段
