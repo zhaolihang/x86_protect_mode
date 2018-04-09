@@ -349,6 +349,29 @@ make_gate_descriptor:                       ;构造门的描述符（调用门�
       
          retf                                   
                              
+;-------------------------------------------------------------------------------
+terminate_current_task:                     ;终止当前任务
+                                            ;注意，执行此例程时，当前任务仍在
+                                            ;运行中。此例程其实也是当前任务的
+                                            ;一部分 
+         pushfd
+         mov edx,[esp]                      ;获得EFLAGS寄存器内容
+         add esp,4                          ;恢复堆栈指针
+
+         mov eax,core_data_seg_sel
+         mov ds,eax
+
+         test dx,0100_0000_0000_0000B       ;测试NT位
+         jnz .b1                            ;当前任务是嵌套的，到.b1执行iretd 
+         mov ebx,core_msg1                  ;当前任务不是嵌套的，直接切换到 
+         call sys_routine_seg_sel:put_string
+         jmp far [prgman_tss]               ;程序管理器任务 
+       
+  .b1: 
+         mov ebx,core_msg0
+         call sys_routine_seg_sel:put_string
+         iretd
+      
 sys_routine_end:
 
 ;===============================================================================
@@ -378,8 +401,8 @@ SECTION core_data vstart=0                  ;系统核心的数据段
 
          salt_4           db  '@TerminateProgram'
                      times 256-($-salt_4) db 0
-                          dd  return_point
-                          dw  core_code_seg_sel
+                          dd  terminate_current_task
+                          dw  sys_routine_seg_sel
 
          salt_item_len   equ $-salt_4
          salt_items      equ ($-salt)/salt_item_len
@@ -391,19 +414,10 @@ SECTION core_data vstart=0                  ;系统核心的数据段
 
          message_2        db  '  System wide CALL-GATE mounted.',0x0d,0x0a,0
          
-         message_3        db  0x0d,0x0a,'  Loading user program...',0
-         
-         do_status        db  'Done.',0x0d,0x0a,0
-         
-         message_6        db  0x0d,0x0a,0x0d,0x0a,0x0d,0x0a
-                          db  '  User program terminated,control returned.',0
-
          bin_hex          db '0123456789ABCDEF'
                                             ;put_hex_dword子过程用的查找表 
 
          core_buf   times 2048 db 0         ;内核用的缓冲区
-
-         esp_pointer      dd 0              ;内核用来临时保存自己的栈指针     
 
          cpu_brnd0        db 0x0d,0x0a,'  ',0
          cpu_brand  times 52 db 0
@@ -411,6 +425,36 @@ SECTION core_data vstart=0                  ;系统核心的数据段
 
          ;任务控制块链
          tcb_chain        dd  0
+
+         ;程序管理器的任务信息 
+         prgman_tss       dd  0             ;程序管理器的TSS基地址
+                          dw  0             ;程序管理器的TSS描述符选择子 
+
+         prgman_msg1      db  0x0d,0x0a
+                          db  '[PROGRAM MANAGER]: Hello! I am Program Manager,'
+                          db  'run at CPL=0.Now,create user task and switch '
+                          db  'to it by the CALL instruction...',0x0d,0x0a,0
+                 
+         prgman_msg2      db  0x0d,0x0a
+                          db  '[PROGRAM MANAGER]: I am glad to regain control.'
+                          db  'Now,create another user task and switch to '
+                          db  'it by the JMP instruction...',0x0d,0x0a,0
+                 
+         prgman_msg3      db  0x0d,0x0a
+                          db  '[PROGRAM MANAGER]: I am gain control again,'
+                          db  'HALT...',0
+
+         core_msg0        db  0x0d,0x0a
+                          db  '[SYSTEM CORE]: Uh...This task initiated with '
+                          db  'CALL instruction or an exeception/ interrupt,'
+                          db  'should use IRETD instruction to switch back...'
+                          db  0x0d,0x0a,0
+
+         core_msg1        db  0x0d,0x0a
+                          db  '[SYSTEM CORE]: Uh...This task initiated with '
+                          db  'JMP instruction,  should switch to Program '
+                          db  'Manager directly by the JMP instruction...'
+                          db  0x0d,0x0a,0
 
 core_data_end:
                
@@ -448,7 +492,7 @@ fill_descriptor_in_ldt:                     ;在LDT内安装一个新的描述�
          mov cx,8
          div cx
          
-         mov cx,ax ;描述符索引号
+         mov cx,ax
          shl cx,3                           ;左移3位，并且
          or cx,0000_0000_0000_0100B         ;使TI位=1，指向LDT，最后使RPL=00 
 
@@ -458,7 +502,7 @@ fill_descriptor_in_ldt:                     ;在LDT内安装一个新的描述�
          pop eax
      
          ret
-      
+         
 ;------------------------------------------------------------------------------- 
 load_relocate_program:                      ;加载并重定位用户程序
                                             ;输入: PUSH 逻辑扇区号
@@ -714,7 +758,36 @@ load_relocate_program:                      ;加载并重定位用户程序
          mov [es:ecx+102],dx                ;到TSS中 
       
          mov word [es:ecx+100],0            ;T=0
-       
+      
+         mov dword [es:ecx+28],0            ;登记CR3(PDBR)
+      
+         ;访问用户程序头部，获取数据填充TSS 
+         mov ebx,[ebp+11*4]                 ;从堆栈中取得TCB的基地址
+         mov edi,[es:ebx+0x06]              ;用户程序加载的基地址 
+
+         mov edx,[es:edi+0x10]              ;登记程序入口点（EIP） 
+         mov [es:ecx+32],edx                ;到TSS
+
+         mov dx,[es:edi+0x14]               ;登记程序代码段（CS）选择子
+         mov [es:ecx+76],dx                 ;到TSS中
+
+         mov dx,[es:edi+0x08]               ;登记程序堆栈段（SS）选择子
+         mov [es:ecx+80],dx                 ;到TSS中
+
+         mov dx,[es:edi+0x04]               ;登记程序数据段（DS）选择子
+         mov word [es:ecx+84],dx            ;到TSS中。注意，它指向程序头部段
+      
+         mov word [es:ecx+72],0             ;TSS中的ES=0
+
+         mov word [es:ecx+88],0             ;TSS中的FS=0
+
+         mov word [es:ecx+92],0             ;TSS中的GS=0
+
+         pushfd
+         pop edx
+         
+         mov dword [es:ecx+36],edx          ;EFLAGS
+
          ;在GDT中登记TSS描述符
          mov eax,[es:esi+0x14]              ;TSS的起始线性地址
          movzx ebx,word [es:esi+0x12]       ;段长度（界限）
@@ -772,8 +845,11 @@ append_to_tcb_link:                         ;在TCB链上追加任务控制块
          
 ;-------------------------------------------------------------------------------
 start:
-         mov ecx,core_data_seg_sel          ;使ds指向核心数据段 
+         mov ecx,core_data_seg_sel          ;令DS指向核心数据段 
          mov ds,ecx
+
+         mov ecx,mem_0_4_gb_seg_sel         ;令ES指向4GB数据段 
+         mov es,ecx
 
          mov ebx,message_1                    
          call sys_routine_seg_sel:put_string
@@ -817,8 +893,8 @@ start:
          mov cx,1_11_0_1100_000_00000B      ;特权级3的调用门(3以上的特权级才
                                             ;允许访问)，0个参数(因为用寄存器
                                             ;传递参数，而没有用栈) 
-         call sys_routine_seg_sel:make_gate_descriptor  ;eax  bx  cx  返回edx:eax
-         call sys_routine_seg_sel:set_up_gdt_descriptor ;edx:eax 返回cx
+         call sys_routine_seg_sel:make_gate_descriptor
+         call sys_routine_seg_sel:set_up_gdt_descriptor
          mov [edi+260],cx                   ;将返回的门描述符选择子回填
          add edi,salt_item_len              ;指向下一个C-SALT条目 
          pop ecx
@@ -828,45 +904,65 @@ start:
          mov ebx,message_2
          call far [salt_1+256]              ;通过门显示信息(偏移量将被忽略) 
       
-         mov ebx,message_3                    
-         call sys_routine_seg_sel:put_string ;在内核中调用例程不需要通过门
+         ;为程序管理器的TSS分配内存空间 
+         mov ecx,104                        ;为该任务的TSS分配内存
+         call sys_routine_seg_sel:allocate_memory
+         mov [prgman_tss+0x00],ecx          ;保存程序管理器的TSS基地址 
       
-         ;创建任务控制块。这不是处理器的要求，而是我们自己为了方便而设立的
+         ;在程序管理器的TSS中设置必要的项目 
+         mov word [es:ecx+96],0             ;没有LDT。处理器允许没有LDT的任务。
+         mov word [es:ecx+102],103          ;没有I/O位图。0特权级事实上不需要。
+         mov word [es:ecx+0],0              ;反向链=0
+         mov dword [es:ecx+28],0            ;登记CR3(PDBR)
+         mov word [es:ecx+100],0            ;T=0
+                                            ;不需要0、1、2特权级堆栈。0特级不
+                                            ;会向低特权级转移控制。
+         
+         ;创建TSS描述符，并安装到GDT中 
+         mov eax,ecx                        ;TSS的起始线性地址
+         mov ebx,103                        ;段长度（界限）
+         mov ecx,0x00408900                 ;TSS描述符，特权级0
+         call sys_routine_seg_sel:make_seg_descriptor
+         call sys_routine_seg_sel:set_up_gdt_descriptor
+         mov [prgman_tss+0x04],cx           ;保存程序管理器的TSS描述符选择子 
+
+         ;任务寄存器TR中的内容是任务存在的标志，该内容也决定了当前任务是谁。
+         ;下面的指令为当前正在执行的0特权级任务“程序管理器”后补手续（TSS）。
+         ltr cx                              
+
+         ;现在可认为“程序管理器”任务正执行中
+         mov ebx,prgman_msg1
+         call sys_routine_seg_sel:put_string
+
          mov ecx,0x46
          call sys_routine_seg_sel:allocate_memory
-         call append_to_tcb_link            ;将任务控制块追加到TCB链表 
+         call append_to_tcb_link            ;将此TCB添加到TCB链中 
       
-         push dword app_disk_sector_num     ;用户程序位于逻辑100扇区
+         push dword app_disk_sector_num                      ;用户程序位于逻辑app_disk_sector_num扇区
          push ecx                           ;压入任务控制块起始线性地址 
        
-         call load_relocate_program
+         call load_relocate_program         
       
-         mov ebx,do_status
+         call far [es:ecx+0x14]             ;执行任务切换。和上一章不同，任务切
+                                            ;换时要恢复TSS内容，所以在创建任务
+                                            ;时TSS要填写完整 
+                                          
+         ;重新加载并切换任务 
+         mov ebx,prgman_msg2
          call sys_routine_seg_sel:put_string
-      
-         mov eax,mem_0_4_gb_seg_sel
-         mov ds,eax
-      
-         ltr [ecx+0x18]                     ;加载任务状态段 
-         lldt [ecx+0x10]                    ;加载LDT
-      
-         mov eax,[ecx+0x44]
-         mov ds,eax                         ;切换到用户程序头部段 
 
-         ;以下假装是从调用门返回。摹仿处理器压入返回参数 
-         push dword [0x08]                  ;调用前的堆栈段选择子
-         push dword 0                       ;调用前的esp
+         mov ecx,0x46
+         call sys_routine_seg_sel:allocate_memory
+         call append_to_tcb_link            ;将此TCB添加到TCB链中
 
-         push dword [0x14]                  ;调用前的代码段选择子 
-         push dword [0x10]                  ;调用前的eip
-      
-         retf
+         push dword app_disk_sector_num     ;用户程序位于逻辑app_disk_sector_num扇区
+         push ecx                           ;压入任务控制块起始线性地址
 
-return_point:                               ;用户程序返回点
-         mov eax,core_data_seg_sel          ;因为c14.asm是以JMP的方式使用调 
-         mov ds,eax                         ;用门@TerminateProgram，回到这 
-                                            ;里时，特权级为3，会导致异常。 
-         mov ebx,message_6
+         call load_relocate_program
+
+         jmp far [es:ecx+0x14]              ;执行任务切换
+
+         mov ebx,prgman_msg3
          call sys_routine_seg_sel:put_string
 
          hlt
