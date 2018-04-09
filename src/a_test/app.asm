@@ -4,6 +4,7 @@
          ;创建日期：2011-10-30 15:19   
          
 ;===============================================================================
+         data_disk_sector_num   equ  200
 SECTION header vstart=0
 
          program_length   dd program_end          ;程序总长度#0x00
@@ -67,7 +68,7 @@ start:
          mov ebx,message_1
          call far [fs:PrintString]
      
-         mov eax,100                         ;逻辑扇区号100
+         mov eax,data_disk_sector_num        ;逻辑扇区号 data_disk_sector_num
          mov ebx,buffer                      ;缓冲区偏移地址
          call far [fs:ReadDiskData]          ;段间调用
      

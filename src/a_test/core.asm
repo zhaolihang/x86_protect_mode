@@ -10,19 +10,19 @@
          video_ram_seg_sel     equ  0x20    ;视频显示缓冲区的段选择子
          core_stack_seg_sel    equ  0x18    ;内核堆栈段选择子
          mem_0_4_gb_seg_sel    equ  0x08    ;整个0-4GB内存的段的选择子
-         app_disk_sector_num   equ  50
+         app_disk_sector_num   equ  100
 ;-------------------------------------------------------------------------------
          ;以下是系统核心的头部，用于加载核心程序 
          core_length      dd core_end       ;核心程序总长度#00
 
          sys_routine_seg  dd section.sys_routine.start  ;系统公用例程段位置#04
-                          dd sys_routineEnd                              
+                          dd sys_routine_end                              
 
          core_data_seg    dd section.core_data.start    ;核心数据段位置#08
-                          dd core_dataEnd                          
+                          dd core_data_end                          
 
          core_code_seg    dd section.core_code.start    ;核心代码段位置#0c
-                          dd core_codeEnd                             
+                          dd core_code_end                             
 
 
          core_entry       dd start          ;核心代码段入口点#10
@@ -329,7 +329,7 @@ make_seg_descriptor:                     ;构造描述符
          or edx,ecx                      ;合并 属性到edx
 
          retf;返回edx:eax
-sys_routineEnd:
+sys_routine_end:
 
 
 ;===============================================================================
@@ -387,7 +387,7 @@ SECTION core_data vstart=0                  ;系统核心的数据段
          cpu_brand  times 52 db 0
          cpu_brnd1        db 0x0d,0x0a,0x0d,0x0a,0
 
-core_dataEnd:
+core_data_end:
 
 ;===============================================================================
 SECTION core_code vstart=0
@@ -604,7 +604,7 @@ return_point:                                ;用户程序返回点
          ;也可以加载并启动其它程序
        
          hlt
-core_codeEnd:           
+core_code_end:           
 ;===============================================================================
 SECTION core_trail
 ;-------------------------------------------------------------------------------
