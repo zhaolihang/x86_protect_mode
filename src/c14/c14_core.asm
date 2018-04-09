@@ -10,20 +10,19 @@
          video_ram_seg_sel     equ  0x20    ;视频显示缓冲区的段选择子
          core_stack_seg_sel    equ  0x18    ;内核堆栈段选择子
          mem_0_4_gb_seg_sel    equ  0x08    ;整个0-4GB内存的段的选择子
-
+         app_disk_sector_num   equ  100
 ;-------------------------------------------------------------------------------
          ;以下是系统核心的头部，用于加载核心程序 
          core_length      dd core_end       ;核心程序总长度#00
 
          sys_routine_seg  dd section.sys_routine.start
-                                            ;系统公用例程段位置#04
+                          dd sys_routine_end
 
          core_data_seg    dd section.core_data.start
-                                            ;核心数据段位置#08
+                          dd core_data_end
 
          core_code_seg    dd section.core_code.start
-                                            ;核心代码段位置#0c
-
+                          dd core_code_end
 
          core_entry       dd start          ;核心代码段入口点#10
                           dw core_code_seg_sel
@@ -449,7 +448,7 @@ fill_descriptor_in_ldt:                     ;在LDT内安装一个新的描述�
          mov cx,8
          div cx
          
-         mov cx,ax
+         mov cx,ax ;描述符索引号
          shl cx,3                           ;左移3位，并且
          or cx,0000_0000_0000_0100B         ;使TI位=1，指向LDT，最后使RPL=00 
 
@@ -642,7 +641,7 @@ load_relocate_program:                      ;加载并重定位用户程序
          mov ecx,4096
          mov eax,ecx                        ;为生成堆栈高端地址做准备
          mov [es:esi+0x28],ecx
-         shr [es:esi+0x28],12               ;登记1特权级堆栈尺寸到TCB
+         shr dword [es:esi+0x28],12               ;登记1特权级堆栈尺寸到TCB
          call sys_routine_seg_sel:allocate_memory
          add eax,ecx                        ;堆栈必须使用高端地址为基地址
          mov [es:esi+0x2c],eax              ;登记1特权级堆栈基地址到TCB
@@ -659,7 +658,7 @@ load_relocate_program:                      ;加载并重定位用户程序
          mov ecx,4096
          mov eax,ecx                        ;为生成堆栈高端地址做准备
          mov [es:esi+0x36],ecx
-         shr [es:esi+0x36],12               ;登记2特权级堆栈尺寸到TCB
+         shr dword [es:esi+0x36],12               ;登记2特权级堆栈尺寸到TCB
          call sys_routine_seg_sel:allocate_memory
          add eax,ecx                        ;堆栈必须使用高端地址为基地址
          mov [es:esi+0x3a],ecx              ;登记2特权级堆栈基地址到TCB
@@ -818,8 +817,8 @@ start:
          mov cx,1_11_0_1100_000_00000B      ;特权级3的调用门(3以上的特权级才
                                             ;允许访问)，0个参数(因为用寄存器
                                             ;传递参数，而没有用栈) 
-         call sys_routine_seg_sel:make_gate_descriptor
-         call sys_routine_seg_sel:set_up_gdt_descriptor
+         call sys_routine_seg_sel:make_gate_descriptor  ;eax  bx  cx  返回edx:eax
+         call sys_routine_seg_sel:set_up_gdt_descriptor ;edx:eax 返回cx
          mov [edi+260],cx                   ;将返回的门描述符选择子回填
          add edi,salt_item_len              ;指向下一个C-SALT条目 
          pop ecx
@@ -837,7 +836,7 @@ start:
          call sys_routine_seg_sel:allocate_memory
          call append_to_tcb_link            ;将任务控制块追加到TCB链表 
       
-         push dword 50                      ;用户程序位于逻辑50扇区
+         push dword app_disk_sector_num     ;用户程序位于逻辑100扇区
          push ecx                           ;压入任务控制块起始线性地址 
        
          call load_relocate_program
