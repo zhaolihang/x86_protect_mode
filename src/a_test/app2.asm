@@ -1,7 +1,7 @@
-         ;代码清单17-3
-         ;文件名：c17_1.asm
+         ;代码清单17-4
+         ;文件名：c17_2.asm
          ;文件说明：用户程序 
-         ;创建日期：2012-07-14 15:46   
+         ;创建日期：2012-07-16 12:27   
 
          program_length   dd program_end          ;程序总长度#0x00
          entry_point      dd start                ;程序入口点#0x04
@@ -24,10 +24,10 @@
          
          PrintDwordAsHex  db  '@PrintDwordAsHexString'
                      times 256-($-PrintDwordAsHex) db 0
-        
+         
          salt_end:
 
-         message_0        db  '  User task A->;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;'
+         message_0        db  '  User task B->$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$'
                           db  0x0d,0x0a,0
 
 ;-------------------------------------------------------------------------------
@@ -38,8 +38,8 @@ start:
           
          mov ebx,message_0
          call far [PrintString]
-         jmp start
-                  
+         jmp start  
+                
          call far [TerminateProgram]              ;退出，并将控制权返回到核心 
     
 ;-------------------------------------------------------------------------------
