@@ -6,7 +6,7 @@ import { Buffer } from 'buffer';
 
 let workspaceFolder = path.join(__dirname, '../');
 let hdFilePath = path.join(workspaceFolder, 'src/LEECHUNG.vhd');
-let nasmFilePath = path.join(__dirname, 'nasm-2.13.03/nasm.exe');
+let nasmFilePath = path.join(__dirname, 'nasm/nasm.exe');
 let buildPath = process.argv[2];
 let isDebug: boolean = false;
 if (!buildPath) {
